@@ -13,6 +13,8 @@ library(tidyverse)
 library(ggplot2)
 library(dplyr)
 library(topicmodels)
+library(tm)
+library(wordcloud)
 
 all.data <- read_csv("/Users/akhil/CSIS 4560/Stock_Sentiment_Analytics/all-data.csv", col_names = F)
 stock.data <- read_csv("/Users/akhil/CSIS 4560/Stock_Sentiment_Analytics/stock_data.csv")
@@ -72,7 +74,12 @@ wordcloud(
 # bing, loughran, afinn, nrc dictionaries
 # need to remember to cite the NRC emotion lexicon
 # need to go through the NRC lexicon
-get_sentiments("nrc")
+loughran <- get_sentiments("loughran")
+summary(as.factor(loughran$sentiment))
+
+nrc <- get_sentiments("nrc")
+summary(as.factor(nrc$sentiment))
+
 sentiment_counts <- get_sentiments("nrc") %>% 
   count(sentiment) %>% 
   mutate(sentiment2 = fct_reorder(sentiment, n))
@@ -197,5 +204,6 @@ ggplot(
 
 # when topic gets duplicated basically we know there's two many values of k in LDA model
 # adding different topics is good
+
 
   
