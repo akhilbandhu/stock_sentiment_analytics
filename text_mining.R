@@ -15,6 +15,7 @@ library(dplyr)
 library(topicmodels)
 library(tm)
 library(wordcloud)
+library(sentimentr)
 
 all.data <- read_csv("/Users/akhil/CSIS 4560/Stock_Sentiment_Analytics/all-data.csv", col_names = F)
 stock.data <- read_csv("/Users/akhil/CSIS 4560/Stock_Sentiment_Analytics/stock_data.csv")
@@ -205,5 +206,5 @@ ggplot(
 # when topic gets duplicated basically we know there's two many values of k in LDA model
 # adding different topics is good
 
-
-  
+?sentimentr()
+emotion(all.data$X1[1])  
