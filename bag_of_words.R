@@ -16,10 +16,30 @@ library(topicmodels)
 library(tm)
 library(wordcloud)
 library(qdap)
+library(e1071)
+library(caret)
+library(gmodels)
+library(pROC)
+library(ROCR)
+library(randomForest)
+library(SnowballC)
+library(caTools)
 
 # lets create a corpus
 stock_text <- all.data[,2]
 stock_text2 <- stock.data[,1]
+
+
+# need to do some moving around of sentiment
+# we have test sentiment as well
+stockdata_sentiment <- stock.data[,2]
+test_sentiment <- as_tibble(test_sentiment)
+names(test_sentiment)[1] <- "Sentiment"
+test_sentiment <- rbind(test_sentiment, stockdata_sentiment)
+stock_text <- as_tibble(stock_text)
+stock_text <- cbind(stock_text, test_sentiment)
+stock_text$Sentiment <- as.factor(stock_text$Sentiment)
+
 names(stock_text)[1] <- "Text"
 stock_text <- rbind(stock_text, stock_text2)
 
@@ -86,7 +106,7 @@ stock_corpus <- VCorpus(stock_source)
 
 # Viewing the content of the 10th text in the corpus
 content(stock_corpus[[1]])
-stock_text$Text[10]
+stock_text$Text[1]
 
 # lets remove stop words using english stop words
 # converting into DTM and TDM 
@@ -152,6 +172,16 @@ word_associate(
   cloud.colors = c("darkred", "darkgreen")
 )
 
+# lets use the stock dtm or tdm to do some learning
+inspect(stock_dtm)
 
+# remove sparse terms
+clean_stock_dtm <- removeSparseTerms(stock_dtm, 0.99)
+clean_stock_dtm
+inspect(clean_stock_dtm)
 
+stocks <- as.data.frame(as.matrix(clean_stock_dtm))
+colnames(stocks) <- make.names(colnames(stocks))
 
+# creating data partition
+train_obs <- createDataPartition()

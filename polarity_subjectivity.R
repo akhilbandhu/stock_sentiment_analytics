@@ -50,6 +50,7 @@ for(i in 1:nrow(all.data)) {
   }
 }
 
+# lets get how many we get correct
 correct_predictions <- sum(ifelse(test_sentiment == train_sentiment, 1, 0))
 
 accuracy <- correct_predictions/nrow(all.data)
