@@ -24,11 +24,17 @@ library(ROCR)
 library(randomForest)
 library(SnowballC)
 library(caTools)
+library(randomForest)
+library(rpart)
+
+all.data <- read_csv("/Users/akhil/CSIS 4560/Stock_Sentiment_Analytics/all-data.csv", col_names = F)
+stock.data <- read_csv("/Users/akhil/CSIS 4560/Stock_Sentiment_Analytics/stock_data.csv")
 
 # lets create a corpus
 stock_text <- all.data[,2]
 stock_text2 <- stock.data[,1]
-
+View(stock.data)
+View(all.data)
 
 # need to do some moving around of sentiment
 # we have test sentiment as well
@@ -86,8 +92,14 @@ stock_text$Text <- removeWords(stock_text$Text, c(stopwords("en"),"will","finnis
 stock_text$Text <- tolower(stock_text$Text)
 stock_text$Text <- removePunctuation(stock_text$Text)
 stock_text$Text <- stripWhitespace(stock_text$Text)
+stock_text$Text <- removeNumbers(stock_text$Text)
+
 # Replace abbreviations
 stock_text$Text <- replace_abbreviation(stock_text$Text)
+
+# Replace number with text
+stock_text$Text <- replace_number(stock_text$Text)
+
 
 # Replace contractions
 stock_text$Text <- replace_contraction(stock_text$Text)
@@ -105,8 +117,8 @@ stock_source <- VectorSource(stock_text$Text)
 stock_corpus <- VCorpus(stock_source)
 
 # Viewing the content of the 10th text in the corpus
-content(stock_corpus[[1]])
-stock_text$Text[1]
+content(stock_corpus[[10]])
+stock_text$Text[10]
 
 # lets remove stop words using english stop words
 # converting into DTM and TDM 
@@ -184,4 +196,66 @@ stocks <- as.data.frame(as.matrix(clean_stock_dtm))
 colnames(stocks) <- make.names(colnames(stocks))
 
 # creating data partition
-train_obs <- createDataPartition()
+stocks$Sentiment <- stock_text$Sentiment
+train_obs <- createDataPartition(stocks$Sentiment,p=0.85,list = FALSE)
+
+stock_dtm_train <- stocks[train_obs,]
+stock_dtm_test <- stocks[-train_obs,]
+prop.table(table(stock_dtm_train$Sentiment))
+prop.table(table(stock_dtm_train$Sentiment))
+
+####Cross validation control
+Control<-trainControl(method="cv",number=10)
+
+#Random Forest
+#train model with 10 k fold cross validation
+stock_RF_Model<-train(Sentiment~.,data=stock_dtm_train,method="rf",
+                      parms = list(split = "information"),
+                      trControl=Control)
+
+#train model with out 10 k fold cross validation
+#tweet_RF_Model <- randomForest(label~ . , data = tweet_dtm_train,na.action=na.roughfix)
+
+####Cross validation control
+predict_stock_RF <- predict(stock_RF_Model, newdata = stock_dtm_test)
+
+###CROSS TABLE
+CrossTable(predict_stock_RF,
+           stock_dtm_test$Sentiment,
+           prop.chisq = FALSE,
+           prop.t = FALSE,
+           prop.r=FALSE,
+           dnn=c('predicted','actual'))
+
+# Tree
+cartModel <- rpart(Sentiment ~ ., data=stock_dtm_train, method="class")
+plot(cartModel)
+text(cartModel)
+
+# predictions
+predictCART <- predict(cartModel, newdata=stock_dtm_test, type="class")
+table(stock_dtm_test$Sentiment, predictCART)
+
+# Accuracy
+(52+64+387)/nrow(stock_dtm_test)
+
+#Cross validation
+numFolds <- trainControl(method = "cv", number = 10)
+cpGrid <- expand.grid(.cp=seq(0.001, 0.01, 0.001))
+model <- train(Sentiment ~ ., 
+               data = stock_dtm_train, 
+               method = "rpart", 
+               trControl = numFolds, 
+               tuneGrid = cpGrid)
+plot(model)
+text(model)
+
+# Improved
+cartModelImproved <- rpart(Sentiment ~ ., data=stock_dtm_train, method="class", cp= 0.001)
+plot(cartModelImproved)
+text(cartModelImproved)
+
+# Prediction 
+predictCARTImproved <- predict(cartModelImproved, newdata=stock_dtm_test, type="class")
+table(stock_dtm_test$Sentiment, predictCARTImproved)
+(69+191+638)/nrow(stock_dtm_test)
