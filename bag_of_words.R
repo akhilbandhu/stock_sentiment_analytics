@@ -26,6 +26,7 @@ library(SnowballC)
 library(caTools)
 library(randomForest)
 library(rpart)
+library(caret)
 
 all.data <- read_csv("/Users/akhil/CSIS 4560/Stock_Sentiment_Analytics/all-data.csv", col_names = F)
 stock.data <- read_csv("/Users/akhil/CSIS 4560/Stock_Sentiment_Analytics/stock_data.csv")
@@ -255,7 +256,75 @@ cartModelImproved <- rpart(Sentiment ~ ., data=stock_dtm_train, method="class", 
 plot(cartModelImproved)
 text(cartModelImproved)
 
+# Baseline Accuracy
+4291/nrow(stock_dtm_train)
+
 # Prediction 
 predictCARTImproved <- predict(cartModelImproved, newdata=stock_dtm_test, type="class")
 table(stock_dtm_test$Sentiment, predictCARTImproved)
 (69+191+638)/nrow(stock_dtm_test)
+
+
+#exp model
+cartModelAnova <- rpart(Sentiment ~ ., data=stock_dtm_train, method="anova", cp= 0.001)
+plot(cartModelAnova)
+text(cartModelAnova)
+
+# predictions
+predictCARTAnova <- predict(cartModelAnova, newdata=stock_dtm_test, type="vector")
+table(stock_dtm_test$Sentiment, predictCARTAnova)
+
+
+# random forest
+rf_classifier <- randomForest(x = stock_dtm_train,
+                             y = stock_dtm_train$Sentiment,
+                             ntree = 300)
+
+rf_classifier
+
+# random forest predictions
+rf_pred <- predict(rf_classifier, newdata = stock_dtm_test)
+confusionMatrix(table(rf_pred,stock_dtm_test$Sentiment))
+table(stock_dtm_test$Sentiment, rf_pred)
+
+# classification
+rf.trees <- randomForest(Sentiment~.,data=stock_dtm_train,importance=TRUE)
+rf.trees
+importance(rf.trees)
+varImpPlot(rf.trees)
+
+rf_preds <- predict(rf.trees,newdata=stock_dtm_test,type="class")
+
+table(stock_dtm_test$Sentiment,rf_preds)
+sum(ifelse(rf_preds==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
+plot(rf.trees)
+
+
+# Naive Bayes 
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+system.time( classifier_nb <- naiveBayes(stock_dtm_train, stock_dtm_train$Sentiment, laplace = 1,
+                                         trControl = control,tuneLength = 7) )
+
+nb_pred <- predict(classifier_nb, type = 'class', newdata = stock_dtm_test)
+confusionMatrix(nb_pred,stock_dtm_test$Sentiment)
+table(stock_dtm_test$Sentiment,nb_pred)
+sum(ifelse(nb_pred==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
+
+
+# Support Vector Machine
+svm_classifier <- svm(Sentiment~., data=stock_dtm_train)
+svm_classifier
+
+# Predictions
+svm_pred <- predict(svm_classifier,stock_dtm_test)
+confusionMatrix(svm_pred,stock_dtm_test$Sentiment)
+table(stock_dtm_test$Sentiment,svm_pred)
+sum(ifelse(svm_pred==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
+
+
+
+
+
+
+
+
