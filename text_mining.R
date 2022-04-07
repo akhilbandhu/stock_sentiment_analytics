@@ -133,7 +133,7 @@ ggplot(
 # Latent Dirichlet Learning (LDA)
 
 # do some document term matices
-dtm_all <- tidy_all_data_2 %>% 
+dtm_all <- sentiment_all_data %>% 
   count(word, id) %>%
   cast_dtm(id,word,n) %>%
   as.matrix()

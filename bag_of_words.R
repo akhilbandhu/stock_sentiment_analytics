@@ -8,6 +8,7 @@
 
 # Libraries 
 library(tidytext)
+library(glmnet)
 library(reshape2)
 library(tidyverse)
 library(ggplot2)
@@ -26,7 +27,7 @@ library(SnowballC)
 library(caTools)
 library(randomForest)
 library(rpart)
-library(caret)
+
 
 all.data <- read_csv("/Users/akhil/CSIS 4560/Stock_Sentiment_Analytics/all-data.csv", col_names = F)
 stock.data <- read_csv("/Users/akhil/CSIS 4560/Stock_Sentiment_Analytics/stock_data.csv")
@@ -40,6 +41,7 @@ View(all.data)
 # need to do some moving around of sentiment
 # we have test sentiment as well
 stockdata_sentiment <- stock.data[,2]
+test_sentiment <- NULL
 test_sentiment <- as_tibble(test_sentiment)
 names(test_sentiment)[1] <- "Sentiment"
 test_sentiment <- rbind(test_sentiment, stockdata_sentiment)
@@ -238,7 +240,7 @@ predictCART <- predict(cartModel, newdata=stock_dtm_test, type="class")
 table(stock_dtm_test$Sentiment, predictCART)
 
 # Accuracy
-(52+64+387)/nrow(stock_dtm_test)
+(52+64+687)/nrow(stock_dtm_test)
 
 #Cross validation
 numFolds <- trainControl(method = "cv", number = 10)
@@ -274,6 +276,23 @@ text(cartModelAnova)
 predictCARTAnova <- predict(cartModelAnova, newdata=stock_dtm_test, type="vector")
 table(stock_dtm_test$Sentiment, predictCARTAnova)
 
+anova_class <- NULL
+index <- 1
+for(i in predictCARTAnova) {
+  if(i <= 1.67) {
+    anova_class[index] <- -1 
+  }
+  else if(i > 1.67 && i <= 2.33){
+    anova_class[index] <- 0
+  }
+  else{
+    anova_class[index] <- 1
+  }
+  index <- index + 1
+}
+table(stock_dtm_test$Sentiment, anova_class)
+sum(ifelse(anova_class==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
+
 
 # random forest
 rf_classifier <- randomForest(x = stock_dtm_train,
@@ -284,7 +303,10 @@ rf_classifier
 
 # random forest predictions
 rf_pred <- predict(rf_classifier, newdata = stock_dtm_test)
+rf_train_pred <- predict(rf_classifier, newdata = stock_dtm_train)
 confusionMatrix(table(rf_pred,stock_dtm_test$Sentiment))
+confusionMatrix(table(rf_train_pred,stock_dtm_train$Sentiment))
+
 table(stock_dtm_test$Sentiment, rf_pred)
 
 # classification
@@ -294,6 +316,10 @@ importance(rf.trees)
 varImpPlot(rf.trees)
 
 rf_preds <- predict(rf.trees,newdata=stock_dtm_test,type="class")
+rf_train_pred <- predict(rf.trees, newdata = stock_dtm_train, type="class")
+table(stock_dtm_train$Sentiment, rf_train_pred)
+sum(ifelse(rf_train_pred==stock_dtm_train$Sentiment,1,0))/nrow(stock_dtm_train)
+
 
 table(stock_dtm_test$Sentiment,rf_preds)
 sum(ifelse(rf_preds==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
@@ -301,7 +327,7 @@ plot(rf.trees)
 
 
 # Naive Bayes 
-control <- trainControl(method="repeatedcv", number=10, repeats=3)
+control <- trainControl(method="repeatedcv", number=10, repeats=3, classProbs = T)
 system.time( classifier_nb <- naiveBayes(stock_dtm_train, stock_dtm_train$Sentiment, laplace = 1,
                                          trControl = control,tuneLength = 7) )
 
@@ -314,17 +340,85 @@ sum(ifelse(nb_pred==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
 # Support Vector Machine
 svm_classifier <- svm(Sentiment~., data=stock_dtm_train)
 svm_classifier
-
 # Predictions
 svm_pred <- predict(svm_classifier,stock_dtm_test)
 confusionMatrix(svm_pred,stock_dtm_test$Sentiment)
 table(stock_dtm_test$Sentiment,svm_pred)
 sum(ifelse(svm_pred==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
 
+# XGBoost
+
+fitControl <- trainControl(method = "cv",
+                           number = 5,
+                           search = "random",
+                           classProbs = TRUE,
+                           sampling = "up",
+                           verboseIter = FALSE
+)
+
+model <- train(Sentiment ~ .,
+               data = stock_dtm_train,
+               preProcess = c("center", "scale"),
+               method = "xgbTree",
+               tuneLength = 50,
+               verbose = FALSE
+)
+plot(model)
+xg_pred <- predict(model,stock_dtm_test)
+xg_pred
+table(stock_dtm_test$Sentiment,xg_pred)
+sum(ifelse(xg_pred==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
 
 
+cm_train <- confusionMatrix(predict(model, newdata = train[Index,]), train[Index,]$target)
+cm_test <- confusionMatrix(predict(model, newdata = train[-Index,]), train[-Index,]$target)
 
 
+ggplot(model) + ggtitle("Results of the xgbTree model")+
+  geom_point(colour = "#6633FF")
 
+
+# CNN 
+# lets try this
+
+model <- keras_model_sequential() %>% 
+  layer_conv_2d(filters = 32, kernel_size = c(3,3), activation = "relu", 
+                input_shape = c(32,32,3)) %>% 
+  layer_max_pooling_2d(pool_size = c(2,2)) %>% 
+  layer_conv_2d(filters = 64, kernel_size = c(3,3), activation = "relu") %>% 
+  layer_max_pooling_2d(pool_size = c(2,2)) %>% 
+  layer_conv_2d(filters = 64, kernel_size = c(3,3), activation = "relu")
+
+summary(model)
+
+model %>% 
+  layer_flatten() %>% 
+  layer_dense(units = 64, activation = "relu") %>% 
+  layer_dense(units = 10, activation = "softmax")
+
+
+# Should we try glm?
+logit_model <- glm(Sentiment~., data = stock_dtm_train, family = "binomial")
+
+logit_pred <- predict(logit_model, newdata = stock_dtm_test, type = "response")
+logit_class <- NULL
+index <- 1
+for(i in logit_pred) {
+  if(i <= 0.33) {
+    logit_class[index] <- -1 
+  }
+  else if(i > 0.66){
+    logit_class[index] <- 1
+  }
+  else{
+    logit_class[index] <- 0 
+  }
+  index <- index + 1
+}
+logit_class <- as.factor(logit_class)
+confusionMatrix(logit_class,stock_dtm_test$Sentiment)
+
+table(stock_dtm_test$Sentiment, logit_class)
+sum(ifelse(logit_class==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
 
 
