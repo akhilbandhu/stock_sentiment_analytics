@@ -34,14 +34,13 @@ stock.data <- read_csv("/Users/akhil/CSIS 4560/Stock_Sentiment_Analytics/stock_d
 
 # lets create a corpus
 stock_text <- all.data[,2]
-stock_text2 <- stock.data[,1]
+stock_text2 <- stock_data[,1]
 View(stock.data)
 View(all.data)
 
 # need to do some moving around of sentiment
 # we have test sentiment as well
-stockdata_sentiment <- stock.data[,2]
-test_sentiment <- NULL
+stockdata_sentiment <- stock_data[,2]
 test_sentiment <- as_tibble(test_sentiment)
 names(test_sentiment)[1] <- "Sentiment"
 test_sentiment <- rbind(test_sentiment, stockdata_sentiment)
@@ -251,6 +250,21 @@ model <- train(Sentiment ~ .,
                trControl = numFolds, 
                tuneGrid = cpGrid)
 plot(model)
+predictModel <- predict(model, newdata=stock_dtm_test, type="prob")
+predictClass <- NULL
+for(i in 1:nrow(predictModel)) {
+  if(predictModel$`0`[i] > predictModel$`1`[i] &&predictModel$`0`[i] > predictModel$`-1`[i]) {
+    predictClass[i] <- 0
+  } else if(predictModel$`1`[i] > predictModel$`0`[i] &&predictModel$`1`[i] > predictModel$`-1`[i]) {
+    predictClass[i] <- 1
+  } else{
+    predictClass[i] <- -1
+  }
+}
+table(stock_dtm_test$Sentiment, predictClass)
+sum(ifelse(predictClass==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
+
+plot(model)
 text(model)
 
 # Improved
@@ -259,12 +273,14 @@ plot(cartModelImproved)
 text(cartModelImproved)
 
 # Baseline Accuracy
+
 4291/nrow(stock_dtm_train)
 
 # Prediction 
 predictCARTImproved <- predict(cartModelImproved, newdata=stock_dtm_test, type="class")
 table(stock_dtm_test$Sentiment, predictCARTImproved)
-(69+191+638)/nrow(stock_dtm_test)
+sum(ifelse(predictCARTImproved==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
+
 
 
 #exp model
@@ -328,8 +344,8 @@ plot(rf.trees)
 
 # Naive Bayes 
 control <- trainControl(method="repeatedcv", number=10, repeats=3, classProbs = T)
-system.time( classifier_nb <- naiveBayes(stock_dtm_train, stock_dtm_train$Sentiment, laplace = 1,
-                                         trControl = control,tuneLength = 7) )
+system.time( classifier_nb <- naiveBayes(stock_dtm_train, stock_dtm_train$Sentiment, laplace = 3,
+                                         trControl = control,tuneLength = 101) )
 
 nb_pred <- predict(classifier_nb, type = 'class', newdata = stock_dtm_test)
 confusionMatrix(nb_pred,stock_dtm_test$Sentiment)
@@ -342,9 +358,17 @@ svm_classifier <- svm(Sentiment~., data=stock_dtm_train)
 svm_classifier
 # Predictions
 svm_pred <- predict(svm_classifier,stock_dtm_test)
+svm_predt <- predict(svm_classifier,stock_dtm_train)
+
 confusionMatrix(svm_pred,stock_dtm_test$Sentiment)
+
+table(stock_dtm_train$Sentiment,svm_predt)
+sum(ifelse(svm_predt==stock_dtm_train$Sentiment,1,0))/nrow(stock_dtm_train)
+
 table(stock_dtm_test$Sentiment,svm_pred)
 sum(ifelse(svm_pred==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
+summary(svm_classifier)
+
 
 # XGBoost
 
@@ -421,4 +445,36 @@ confusionMatrix(logit_class,stock_dtm_test$Sentiment)
 table(stock_dtm_test$Sentiment, logit_class)
 sum(ifelse(logit_class==stock_dtm_test$Sentiment,1,0))/nrow(stock_dtm_test)
 
+#RNN
 
+# set some parameters for our model
+max_len <- 6 # the number of previous examples we'll look at
+batch_size <- 32 # number of sequences to look at at one time during training
+total_epochs <- 15 # how many times we'll look @ the whole dataset while training our model
+
+# set a random seed for reproducability
+set.seed(123)
+rnn_model <- keras_model_sequential()
+rnn_model %>%
+  layer_dense(input_shape = dim(stock_dtm_train), units = max_len)
+
+rnn_model %>% 
+  layer_simple_rnn(units = 6)
+
+rnn_model %>%
+  layer_dense(units = 1, activation = 'sigmoid') # output
+
+summary(rnn_model)
+
+rnn_model %>% compile(loss = 'categorical_crossentropy', 
+                  optimizer = optimizer_rmsprop(), 
+                  metrics = 'accuracy')
+
+# Actually train our model! This step will take a while
+x <- array(stock_dtm_train[,-156])
+rnn_history <- rnn_model %>% fit(
+  x, stock_dtm_train$Sentiment,
+  batch_size = batch_size,
+  epochs = total_epochs,
+  validation_split = 0.01
+)

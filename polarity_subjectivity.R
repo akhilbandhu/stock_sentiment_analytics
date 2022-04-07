@@ -13,7 +13,7 @@ vader <- get_vader(text)
 # if "compound" between 0.3 and -0.3, then neutral
 # else if "compound" between 0.3 and 1.0, then positive
 # else "compound" between -0.3 and -1.0, then negative
-text_sentiment <- as.factor(all.data$X1)
+text_sentiment <- as.factor(all.data$V1)
 train_sentiment <- NULL
 test_sentiment <- NULL
 
